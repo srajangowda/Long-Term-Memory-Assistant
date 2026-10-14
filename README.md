@@ -1,10 +1,20 @@
 # Long-Term Memory Assistant
 
-> **Phase 1 — Basic AI Chat Foundation**
+> **Phase 1 — Basic AI Chat Foundation (Google Gemini & Swappable LLM Architecture)**
 
-A modern full-stack web application establishing the clean, scalable foundation for an intelligent personal AI assistant powered by **Amazon Bedrock**.
+A modern full-stack web application establishing the clean, scalable foundation for an intelligent personal AI assistant powered by **Google Gemini** (with support for offline Mock and extensible provider architecture).
 
-Phase 1 focuses exclusively on delivering a robust, secure, and responsive chat architecture without persistent memory. In subsequent phases, this foundation will be augmented with long-term vector memory (Amazon OpenSearch) and knowledge graph memory (Amazon Neptune).
+Phase 1 focuses on delivering a robust, secure, and responsive chat architecture. In subsequent phases, this foundation will be augmented with persistent memory (SQLite).
+
+---
+
+## Why Bedrock Was Replaced
+
+Initially, Phase 1 was prototyped using Amazon Bedrock. However, Bedrock introduces significant hurdles for rapid local development:
+- **Account-Level Gatekeeping:** AWS recently retired the legacy "Model Access" console page, and newer AWS accounts encounter `ValidationException: Operation not allowed` due to internal anti-fraud holds until approved by AWS Support.
+- **Complex Authentication:** Required AWS CLI credentials, IAM users/roles, and multiple permission policies.
+- **Provider Migration Decision:** Replaced Bedrock with **Google Gemini API** using the official `@google/genai` SDK. Gemini provides a free-of-charge usage tier via Google AI Studio, quick key generation, and fast inference (`gemini-2.5-flash`).
+- **Provider-Independent Design:** The backend is decoupled from any single vendor via a generic `LLMProvider` interface, allowing instant switching between Gemini, Mock (offline), or future providers (Groq, Ollama) with zero UI or route rewrites.
 
 ---
 
@@ -16,24 +26,30 @@ Phase 1 focuses exclusively on delivering a robust, secure, and responsive chat 
 ┌────────────────────────┐
 │  React Frontend (Vite) │
 └───────────┬────────────┘
-            │  POST /api/chat (JSON payload)
+            │  POST /api/chat (JSON payload: { message } or { messages })
             ▼
 ┌────────────────────────┐
-│ Node.js / Express API  │  <-- Input validation, CORS, error isolation
+│ Node.js / Express API  │  <-- Input validation, CORS, error sanitization
 └───────────┬────────────┘
-            │  AWS SDK v3 ConverseCommand
+            │  Delegates to LLMService (reads LLM_PROVIDER from .env)
             ▼
 ┌────────────────────────┐
-│     Amazon Bedrock     │  <-- Claude 3 / Nova / Llama (Configurable)
-└───────────┬────────────┘
-            │  Generated AI Text Response
-            ▼
+│  LLMProvider Interface │  <-- Swappable interface (types.ts)
+└─────┬────────────┬─────┘
+      │            │
+      ▼            ▼
+┌──────────────┐ ┌────────────────┐
+│GeminiProvider│ │MockLLMProvider │  <-- Future: GroqProvider, OllamaProvider
+│@google/genai │ │Offline testing │
+└─────┬────────┘ └────────────────┘
+      │  Generated Text Response
+      ▼
 ┌────────────────────────┐
 │  React Frontend (Vite) │  <-- Displays formatted message in conversation
 └────────────────────────┘
 ```
 
-> **Security Guardrail:** The frontend **never** holds AWS credentials or directly contacts AWS services. All Bedrock invocations are managed securely by the backend via the AWS SDK standard credential provider chain.
+> **Security Guardrail:** The frontend **never** holds API keys or communicates directly with Google Gen AI. All Gemini invocations are managed securely by the backend. API keys are never logged or exposed in client responses or Git repositories.
 
 ---
 
@@ -53,7 +69,7 @@ long-term-memory-assistant/
 │   │   │   └── chat.ts                    # Frontend chat TypeScript definitions
 │   │   ├── App.tsx                        # Main state orchestrator
 │   │   ├── main.tsx                       # React DOM entry point
-│   │   └── index.css                      # Tailwind styling & sleek dark scrollbars
+│   │   └── index.css                      # Tailwind styling & dark scrollbars
 │   ├── package.json
 │   ├── tailwind.config.js
 │   ├── tsconfig.json
@@ -64,20 +80,28 @@ long-term-memory-assistant/
 │   │   ├── routes/
 │   │   │   └── chat.ts                    # POST /api/chat and GET /api/health
 │   │   ├── services/
-│   │   │   └── bedrock.ts                 # Dedicated Amazon Bedrock service wrapper
+│   │   │   └── llm/
+│   │   │       ├── types.ts               # LLMProvider generic interface
+│   │   │       ├── errors.ts              # Typed LLM errors (RateLimit, Auth, etc.)
+│   │   │       ├── geminiProvider.ts      # Official @google/genai integration
+│   │   │       ├── mockProvider.ts        # Mock provider for offline development
+│   │   │       └── llmService.ts          # Central dispatcher & provider selector
 │   │   ├── types/
-│   │   │   └── chat.ts                    # Backend request/response types
-│   │   ├── app.ts                         # Express application setup & middleware
+│   │   │   ├── chat.ts                    # Backend chat request/response types
+│   │   │   └── memory.ts                  # Phase 2 memory extraction schema
+│   │   ├── app.ts                         # Express setup & CORS configuration
 │   │   └── server.ts                      # Server listener entry point
 │   ├── tests/
-│   │   └── chat.test.ts                   # Automated Jest & Supertest suites (mocked AWS)
+│   │   ├── chat.test.ts                   # Supertest integration tests for chat route
+│   │   ├── geminiProvider.test.ts         # Unit tests for Gemini provider & error handling
+│   │   └── mockProvider.test.ts           # Unit tests for Mock provider & switching
 │   ├── .env.example                       # Environment template
 │   ├── jest.config.js
 │   ├── package.json
 │   └── tsconfig.json
 │
 ├── design.md                              # Product UI & visual design specification
-├── README.md                              # Setup, AWS configuration & architecture documentation
+├── README.md                              # Setup, Gemini configuration & architecture documentation
 └── .gitignore                             # Secret & artifact exclusion rules
 ```
 
@@ -85,92 +109,47 @@ long-term-memory-assistant/
 
 ## Prerequisites
 
-1. **Node.js**: `v18.x` or higher (verified with `v20+` / `v24+`).
+1. **Node.js**: `v18.x` or higher (verified with `v20+` / `v22+`).
 2. **npm**: `v9.x` or higher.
-3. **AWS Account**: With access to Amazon Bedrock models.
+3. **Google Gemini API Key** (Free tier available at [Google AI Studio](https://aistudio.google.com/)).
 
 ---
 
-## AWS Setup & Minimum IAM Permissions
+## Getting a Gemini API Key
 
-### 1. Enable Model Access in AWS Bedrock Console
-Amazon Bedrock requires enabling model access before invocation:
-1. Log in to the [AWS Management Console](https://console.aws.amazon.com/bedrock).
-2. Ensure you are in your desired region (e.g. `us-east-1` or `us-west-2`).
-3. In the left navigation, choose **Model access**.
-4. Click **Enable specific models** (or **Modify model access**), select your desired model (e.g., Anthropic Claude 3 Haiku or Amazon Nova Micro), and submit.
+1. Go to [Google AI Studio](https://aistudio.google.com/).
+2. Sign in with your Google account.
+3. Click **Get API key** (or **Create API key**).
+4. Select or create a project, then copy your generated API key.
+5. In your local `backend/.env` file, set:
+   ```env
+   LLM_PROVIDER=gemini
+   GEMINI_API_KEY=your_actual_api_key_here
+   GEMINI_MODEL=gemini-2.5-flash
+   ```
 
-### 2. Minimum Required IAM Policy
-Follow the principle of least privilege. Do **not** grant administrator credentials. The backend requires only `bedrock:InvokeModel`:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "BedrockInvokeModelOnly",
-      "Effect": "Allow",
-      "Action": [
-        "bedrock:InvokeModel"
-      ],
-      "Resource": [
-        "arn:aws:bedrock:*::foundation-model/*"
-      ]
-    }
-  ]
-}
-```
-
-### 3. Configuring Local AWS Credentials Securely
-The backend uses the **AWS SDK Standard Credential Provider Chain**. Do **not** hardcode credentials in code or commit them to Git.
-
-**Recommended Option A: AWS CLI**
-```bash
-aws configure
-# Enter your AWS Access Key ID
-# Enter your AWS Secret Access Key
-# Enter default region (e.g., us-east-1)
-```
-
-**Option B: Standard Environment Variables in Terminal**
-```bash
-# On Linux/macOS
-export AWS_ACCESS_KEY_ID="your-access-key-id"
-export AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-export AWS_REGION="us-east-1"
-
-# On Windows (PowerShell)
-$env:AWS_ACCESS_KEY_ID="your-access-key-id"
-$env:AWS_SECRET_ACCESS_KEY="your-secret-access-key"
-$env:AWS_REGION="us-east-1"
-```
+> [!CAUTION]
+> Never commit your `.env` file or paste your API key into source code or Git. `backend/.gitignore` excludes `.env` by default.
 
 ---
 
 ## Environment Variables Configuration
 
-Copy the example file in the `backend/` directory:
+In `backend/.env` (created from `backend/.env.example`):
 
-```bash
-cd backend
-cp .env.example .env
-```
-
-| Variable | Description | Default |
+| Variable | Description | Default / Example |
 |---|---|---|
 | `PORT` | Local port where Express server listens | `5000` |
-| `AWS_REGION` | AWS region where Bedrock model is hosted | `us-east-1` |
-| `BEDROCK_MODEL_ID` | Amazon Bedrock model identifier | `anthropic.claude-3-haiku-20240307-v1:0` |
-| `CORS_ORIGIN` | Allowed origin for frontend requests | `http://localhost:5173` |
+| `FRONTEND_URL` | Allowed origin for frontend requests | `http://localhost:5173` |
+| `LLM_PROVIDER` | Active AI provider (`gemini` or `mock`) | `gemini` (or `mock` offline) |
+| `GEMINI_API_KEY` | Google AI Studio API key | `AIzaSy...` |
+| `GEMINI_MODEL` | Gemini model ID | `gemini-2.5-flash` |
+| `MOCK_MODEL` | Label for mock responses in development | `mock-assistant-v1` |
 
-### Supported Bedrock Models
-The backend uses Bedrock's unified `ConverseCommand`, which natively supports:
-- `anthropic.claude-3-haiku-20240307-v1:0` (Fast & cost-effective)
-- `anthropic.claude-3-5-haiku-20241022-v1:0`
-- `anthropic.claude-3-5-sonnet-20240620-v1:0`
-- `amazon.nova-micro-v1:0`
-- `amazon.nova-lite-v1:0`
-- `meta.llama3-8b-instruct-v1:0`
+### Supported Gemini Models
+- `gemini-2.5-flash` *(Recommended)*: Fast, low latency, latest multimodal standard model with free tier.
+- `gemini-1.5-flash`: Highly stable and responsive.
+- `gemini-1.5-pro`: Best for complex reasoning and deep context analysis.
 
 ---
 
@@ -184,9 +163,9 @@ npm install
 npm run dev
 ```
 
-The backend starts at `http://localhost:5000`:
-- Health check: `GET http://localhost:5000/api/health`
-- Chat API: `POST http://localhost:5000/api/chat`
+The backend server starts at `http://localhost:5000`:
+- **Health check:** `GET http://localhost:5000/api/health`
+- **Chat endpoint:** `POST http://localhost:5000/api/chat`
 
 ### 2. Start the Frontend Client
 
@@ -198,52 +177,70 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173` in your browser. The Vite development server automatically proxies `/api` requests to `http://localhost:5000`.
+
+---
+
+## Offline Development with Mock Provider
+
+If you do not have an API key or wish to develop offline without consuming API quota:
+
+1. In `backend/.env`, set:
+   ```env
+   LLM_PROVIDER=mock
+   ```
+2. Restart the backend (`npm run dev`).
+3. The server will respond instantly with simulated responses clearly labeled `[Mock AI - mock-assistant-v1]: ...`.
 
 ---
 
 ## Running Automated Tests
 
-The backend includes a comprehensive suite of unit and integration tests using Jest and Supertest. All Bedrock calls are mocked, so automated tests run completely offline without incurring AWS costs or requiring live credentials:
+All automated tests use mocks and do **not** require an external API key or network connection:
 
 ```bash
 cd backend
 npm test
 ```
 
-### Covered Test Cases:
-- `GET /api/health` returns status `200 OK`
-- `POST /api/chat` with valid single message returns `200 OK` and AI reply
-- `POST /api/chat` with conversation context returns `200 OK` and AI reply
-- Empty message handling (returns `400 Bad Request` with `{ error: "Message cannot be empty" }`)
-- Empty request body / malformed payload validation
-- Bedrock failure handling (returns safe `500 Internal Server Error` without leaking stack traces or credentials)
+### Covered Test Suites (32 Tests):
+- **API Integration (`chat.test.ts`):**
+  - Health check (`GET /api/health`)
+  - Single message & conversation history support (`POST /api/chat`)
+  - API contract preservation (`message` and `reply` fields)
+  - Input validation (empty, whitespace, excessive length > 10,000 chars)
+  - Safe error handling (401, 429, 500, 503) without leaking internal secrets or stack traces
+- **Gemini Provider (`geminiProvider.test.ts`):**
+  - Missing API key & placeholder detection (`ConfigurationError`)
+  - Multi-turn mapping (`assistant` -> `model`)
+  - Rate limiting & quota handling (`429` / `RESOURCE_EXHAUSTED`)
+  - Authentication errors (`401` / `403`)
+  - Model not found (`404` -> `ModelUnavailableError`)
+  - Network connectivity errors (503)
+  - Memory extraction schema validation & JSON error resilience
+- **Mock Provider & Switching (`mockProvider.test.ts`):**
+  - Mock identification and labeled outputs
+  - Provider selection via `LLM_PROVIDER`
+  - Prevention of silent fallback to mock on provider error
 
 ---
 
-## Preparation for Future Phases (Phase 2 & Beyond)
+## Troubleshooting
 
-Phase 1 is explicitly designed to remain clean and extensible without rewriting:
+| Issue | Likely Cause | Solution |
+|---|---|---|
+| **401 / 403 Authentication failed** | Missing, invalid, or placeholder `GEMINI_API_KEY` | Check `backend/.env` and verify key from [Google AI Studio](https://aistudio.google.com/). |
+| **429 Rate limit / Quota exceeded** | Gemini free tier requests per minute (RPM) exceeded | Wait 60 seconds before making additional requests, or switch to `LLM_PROVIDER=mock` during UI layout testing. |
+| **404 Model not found** | Unsupported or typo in `GEMINI_MODEL` | Set `GEMINI_MODEL=gemini-2.5-flash` in `backend/.env`. |
+| **Frontend displays "Disconnected"** | Backend server is not running on port 5000 | Run `npm run dev` in `backend` directory. |
+| **CORS errors** | Frontend URL mismatch | Set `FRONTEND_URL=http://localhost:5173` in `backend/.env`. |
 
-1. **Modular Service Layer (`services/bedrock.ts`):**
-   In Phase 2, memory extraction and retrieval will wrap around the Bedrock service:
-   ```
-   POST /api/chat
-         │
-         ▼
-   retrieveMemory() ───────► (Phase 2: OpenSearch Vector Search + Neptune Graph)
-         │
-         ▼
-   bedrockService.generateResponse(promptWithContext)
-         │
-         ▼
-   extractMemory() ────────► (Phase 2: Extract & store new facts/entities)
-         │
-         ▼
-   Client Response
-   ```
-2. **Decoupled API Contract:**
-   The frontend simply exchanges `{ messages: [...] }` with the backend. When long-term memory is active in Phase 2, the frontend contract remains stable, while optionally receiving enriched metadata (e.g. recalled memories).
-3. **Stateless Backend:**
-   No session affinity is stored in Express, making it directly portable to AWS Lambda and API Gateway when transitioning to serverless deployment.
+---
 
+## Future Phases (Phase 2 & Beyond)
+
+1. **Phase 2 — SQLite Long-Term Memory:**
+   - Add SQLite database (`better-sqlite3` or `sqlite3`) to store conversation logs and extracted user facts.
+   - Use `llmService.extractMemories(text)` to automatically extract structured facts (preferences, skills, goals, projects) and persist them across sessions.
+2. **Additional LLM Providers:**
+   - To add **Groq** or **Ollama**, implement the `LLMProvider` interface in `services/llm/` and add the case to `llmService.ts`. No route or frontend changes required.

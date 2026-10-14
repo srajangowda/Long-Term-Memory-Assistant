@@ -28,7 +28,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const starterPrompts = [
     'Explain machine learning in simple terms',
     'What is the difference between SQL and NoSQL?',
-    'How does Amazon Bedrock work?',
+    'How does long-term memory work in AI?',
     'What are the key principles of clean code?',
   ];
 
@@ -48,7 +48,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
             <p className="text-sm text-slate-400 max-w-md leading-relaxed mb-6">
               You are currently running <span className="text-indigo-300 font-medium">Phase 1 (Basic AI Chat)</span>.
-              The assistant communicates directly with Amazon Bedrock with in-session context.
+              The assistant communicates with Google Gemini with in-session context.
             </p>
 
             <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 max-w-lg mb-8 flex items-start gap-2.5 text-left">

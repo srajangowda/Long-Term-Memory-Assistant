@@ -1,13 +1,13 @@
 # Design Specification — Long-Term Memory Assistant (Phase 1)
 
 ## 1. Product Purpose
-The **Long-Term Memory Assistant** is an intelligent conversational agent engineered to deliver reliable, context-aware dialogues. Phase 1 establishes the foundational user interface and resilient communication pipeline with **Amazon Bedrock**. The interface emphasizes clarity, zero cognitive friction, responsive interaction, and architectural readiness for future memory visualization (knowledge graph & vector memory).
+The **Long-Term Memory Assistant** is an intelligent conversational agent engineered to deliver reliable, context-aware dialogues. Phase 1 establishes the foundational user interface and resilient communication pipeline with **Google Gemini** (using a provider-independent `LLMProvider` architecture). The interface emphasizes clarity, zero cognitive friction, responsive interaction, and architectural readiness for future memory visualization (knowledge graph & vector memory).
 
 ---
 
 ## 2. Target User
 - **Engineers & Researchers:** Requiring a high-performance, distraction-free conversational AI interface.
-- **Enterprise Users:** Interacting with private AWS foundation models without unnecessary UI noise.
+- **Enterprise & Independent Developers:** Interacting with state-of-the-art foundation models with minimal configuration overhead and transparent error handling.
 - **Developers extending the platform:** Needing modular React and TypeScript components that can easily accommodate memory inspection panels and metadata overlays in later phases.
 
 ---
@@ -95,7 +95,7 @@ The **Long-Term Memory Assistant** is an intelligent conversational agent engine
 1. **Initial / Empty State:**
    - Friendly greeting with phase badge.
    - Clarification that long-term vector/graph memory will be introduced in subsequent phases.
-   - Clickable suggestion chips to immediately test Bedrock responses.
+   - Clickable suggestion chips to immediately test AI responses.
 
 2. **Active Conversation:**
    - Multi-turn conversation preserved in browser memory.

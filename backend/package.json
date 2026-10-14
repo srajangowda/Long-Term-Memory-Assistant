@@ -9,11 +9,20 @@
     "start": "node dist/server.js",
     "test": "jest --detectOpenHandles"
   },
-  "keywords": ["aws", "bedrock", "ai", "chat", "express", "typescript"],
+  "keywords": [
+    "gemini",
+    "google-genai",
+    "ai",
+    "chat",
+    "llm",
+    "memory",
+    "express",
+    "typescript"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@aws-sdk/client-bedrock-runtime": "^3.750.0",
+    "@google/genai": "^2.29.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2"
@@ -31,4 +40,3 @@
     "typescript": "^5.7.3"
   }
 }
-

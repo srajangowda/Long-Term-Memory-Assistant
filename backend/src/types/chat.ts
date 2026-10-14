@@ -12,6 +12,7 @@ export interface ChatRequest {
 
 export interface ChatResponse {
   message: string;
+  reply?: string;
 }
 
 export interface ErrorResponse {
@@ -20,5 +21,5 @@ export interface ErrorResponse {
 
 export interface HealthResponse {
   status: 'ok';
+  provider?: string;
 }
-
